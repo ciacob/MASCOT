@@ -1,0 +1,4 @@
+1. suport pentru clase MXML;
+2. suport pentru listarea claselor dintr-un SWC;
+3. suport pentru clasele furnizate de SDK
+Nota: toate clasele din categoriile 1-3 acum apar ca dependinte nerezolvate.

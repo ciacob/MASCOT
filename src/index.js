@@ -1,32 +1,23 @@
-const shell = require("shelljs");
-const axios = require("axios");
+const { cloneRepos, cloneRepo } = require ('./own_modules/clone_tools');
+const { doShallowScan, doDeepScan } = require ('./own_modules/scan_tools');
 
-async function cloneOwnRepos(githubUser, targetDir) {
-  try {
-    // Fetch the user's repositories from GitHub API
-    const response = await axios.get(
-      `https://api.github.com/users/${githubUser}/repos?per_page=100`
-    );
-    const repos = response.data;
-
-    // Filter out forked repositories
-    const ownRepos = repos.filter((repo) => !repo.fork);
-
-    // Clone each repository
-    ownRepos.forEach((repo) => {
-      const cloneUrl = repo.clone_url;
-      const repoName = repo.name;
-      const targetPath = `${targetDir}/${repoName}`;
-
-      console.log(`Cloning ${repoName} into ${targetPath}`);
-      shell.exec(`git clone ${cloneUrl} ${targetPath}`);
-    });
-
-    console.log("All repositories have been cloned.");
-  } catch (error) {
-    console.error("Error fetching repositories:", error);
-  }
-}
 
 // MAIN
-cloneOwnRepos("ciacob", "/Users/ciacob/DEV/github");
+const workspace_dir = "d:\\_DEV_\\github\\actionscript";
+const cache_dir = "d:\\_DEV_\\github\\nodejs\\MASCOT\\cache";
+const userName = "ciacob";
+const repoLanguages = ["ActionScript"];
+const dry_run_mode = true;
+(async function () {
+  const report = await cloneRepos(
+    workspace_dir,
+    userName,
+    repoLanguages,
+    undefined,
+    dry_run_mode
+  );
+  console.dir(report, { depth : null});
+
+  doShallowScan(workspace_dir, cache_dir, true);
+  doDeepScan(workspace_dir, cache_dir, true);
+})();
