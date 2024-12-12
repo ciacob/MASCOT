@@ -1,4 +1,4 @@
-const { cloneRepos, cloneRepo } = require("./own_modules/clone_tools");
+const { cloneRepos } = require("./own_modules/clone_tools");
 const { doShallowScan, doDeepScan } = require("./own_modules/scan_tools");
 const os = require("os");
 
