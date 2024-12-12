@@ -1,5 +1,7 @@
 const { cloneRepos } = require("./own_modules/clone_tools");
 const { doShallowScan, doDeepScan } = require("./own_modules/scan_tools");
+const { buildDependencies } = require ('./own_modules/dep_tools');
+const { writeConfig } = require ('./own_modules/file_tools');
 const os = require("os");
 
 function isWin() {
@@ -26,9 +28,11 @@ const dry_run_mode = true;
     undefined,
     dry_run_mode
   );
-  console.dir(report, { depth: null });
-  if (!dry_run_mode) {
+  // console.dir(report, { depth: null });
+  // if (!dry_run_mode) {
     doShallowScan(workspace_dir, cache_dir, true);
     doDeepScan(workspace_dir, cache_dir, true);
-  }
+    buildDependencies(workspace_dir, cache_dir, true);
+    writeConfig(workspace_dir, cache_dir, true);
+  // }
 })();

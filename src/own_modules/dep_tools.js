@@ -142,7 +142,7 @@ function buildDependencies(workspaceDir, outputDir, replace = false) {
 
   // Write results to deps.json
   fs.writeFileSync(depsFilePath, JSON.stringify(sortedDependencies, null, 2));
-  fs.appendFileSync(problemsFilePath, problems.join("\n"));
+  fs.appendFileSync(problemsFilePath, problems.join("\n\n"));
 
   console.log(`Dependency analysis complete. Results saved to ${depsFilePath}`);
   console.log(`Problems logged to ${problemsFilePath}`);
