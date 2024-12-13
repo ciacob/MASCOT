@@ -135,4 +135,96 @@ function writeConfig(
   console.log("Configuration generation complete.");
 }
 
-module.exports = { writeConfig };
+/**
+ * Writes or updates `.vscode/settings.json` files in each project listed in `projects.json`.
+ *
+ * @param {string} workspaceDir - Absolute path to the folder where repositories are cloned.
+ * @param {string} cacheDir - Absolute path to the folder where `projects.json` is stored.
+ * @param {Object} settings - Key-value pairs to add to the `settings.json` file.
+ *                             The "$sdk" short key will be expanded to "as3mxml.sdk.framework".
+ * @param {boolean} [purge=false] - Whether to replace the `settings.json` file entirely.
+ */
+function writeVSCSettings(workspaceDir, cacheDir, settings, purge = false) {
+  const projectsFilePath = path.join(cacheDir, "projects.json");
+  const problemsFilePath = path.join(cacheDir, "problems.log");
+
+  // Ensure `projects.json` exists
+  if (!fs.existsSync(projectsFilePath)) {
+    const errorMsg =
+      "`projects.json` is missing. Cannot write VSCode settings.";
+    console.error(errorMsg);
+    fs.appendFileSync(problemsFilePath, errorMsg + "\n");
+    return;
+  }
+
+  // Exit early if no settings are provided
+  if (!settings || Object.keys(settings).length === 0) {
+    console.log("No settings provided. Exiting early.");
+    return;
+  }
+
+  // Expand "$sdk" to "as3mxml.sdk.framework"
+  if (settings["$sdk"]) {
+    settings["as3mxml.sdk.framework"] = settings["$sdk"];
+    delete settings["$sdk"];
+  }
+
+  const projects = JSON.parse(fs.readFileSync(projectsFilePath));
+  const problems = [];
+
+  projects.forEach((project) => {
+    const { project_home_dir } = project;
+    const projectPath = path.resolve(project_home_dir);
+    const vscodePath = path.join(projectPath, ".vscode");
+    const settingsPath = path.join(vscodePath, "settings.json");
+
+    try {
+      let existingSettings = {};
+
+      // Handle purge
+      if (purge && fs.existsSync(settingsPath)) {
+        fs.unlinkSync(settingsPath);
+        console.log(`Purged existing settings for project: ${projectPath}`);
+      }
+
+      // Ensure `.vscode` directory exists
+      if (!fs.existsSync(vscodePath)) {
+        fs.mkdirSync(vscodePath);
+      }
+
+      // Load existing settings if not purging
+      if (!purge && fs.existsSync(settingsPath)) {
+        try {
+          existingSettings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+        } catch (err) {
+          problems.push(
+            `Failed to parse existing settings for project: ${projectPath}. Error: ${err.message}`
+          );
+        }
+      }
+
+      // Merge new settings
+      const updatedSettings = {
+        ...existingSettings,
+        ...settings,
+      };
+
+      // Write updated settings
+      fs.writeFileSync(settingsPath, JSON.stringify(updatedSettings, null, 2));
+      console.log(`Updated settings for project: ${projectPath}`);
+    } catch (err) {
+      const errorMsg = `Failed to write settings for project: ${projectPath}. Error: ${err.message}`;
+      console.error(errorMsg);
+      problems.push(errorMsg);
+    }
+  });
+
+  // Append problems to `problems.log`
+  if (problems.length > 0) {
+    fs.appendFileSync(problemsFilePath, problems.join("\n") + "\n\n");
+  }
+
+  console.log("VSCode settings update complete.");
+}
+
+module.exports = { writeConfig, writeVSCSettings };
