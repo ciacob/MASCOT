@@ -40,8 +40,13 @@ async function cloneRepos(
 
     // Construct the search query
     const queryParts = [`user:${githubUser}`, ...safeLanguages];
-    if (fork === true) queryParts.push("fork:true");
-    if (fork === false) queryParts.push("fork:false");
+    if (fork === true) {
+      queryParts.push("fork:only"); // Include only forks
+    } else if (fork === false) {
+      queryParts.push("fork:false"); // Exclude forks
+    } else if (fork === undefined) {
+      queryParts.push("fork:true"); // Include both forks and non-forks
+    }
     const query = queryParts.join(" ");
 
     // Fetch the repositories using GitHub Search API

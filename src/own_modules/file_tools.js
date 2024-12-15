@@ -100,9 +100,6 @@ function writeConfig(
     const asConfig = {
       config: defaultValues.config_type,
       ...(projectType === "app" ? { type: "app", mainClass } : { type: "lib" }),
-      files: classFiles.map((file) =>
-        path.join(projectPath, defaultValues.src_dir, file)
-      ),
       copySourcePathAssets: defaultValues.copy_assets,
       compilerOptions: {
         debug: defaultValues.debug_mode,
@@ -227,4 +224,155 @@ function writeVSCSettings(workspaceDir, cacheDir, settings, purge = false) {
   console.log("VSCode settings update complete.");
 }
 
-module.exports = { writeConfig, writeVSCSettings };
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////
+////////////////////////////////////
+//////////////////////////
+////////////////
+//////////
+
+/**
+ * Writes custom build tasks to the `tasks.json` file in the `.vscode` folder for each project.
+ *
+ * @param {string} workspaceDir - Absolute path to the folder where repositories are cloned.
+ * @param {string} cacheDir - Absolute path to the cache directory where `tasks.json` is located.
+ * @param {Object} settings - Object containing essential information for the tasks.
+ *                             `path_to_asconfigc` and `path_to_air_sdk` are expected keys.
+ * @param {boolean} [purge=false] - Whether to replace existing MASCOT tasks or skip if found.
+ */
+function writeVSCTasks(workspaceDir, cacheDir, settings, purge = false) {
+  const tasksFilePath = path.join(cacheDir, "tasks.json");
+  const problemsFilePath = path.join(cacheDir, "problems.log");
+
+  // Ensure `tasks.json` exists
+  if (!fs.existsSync(tasksFilePath)) {
+    const errorMsg = "`tasks.json` is missing. Cannot write VSCode tasks.";
+    console.error(errorMsg);
+    fs.appendFileSync(problemsFilePath, errorMsg + "\n");
+    return;
+  }
+
+  // Validate settings
+  const pathToAsconfigc = settings.path_to_asconfigc || "asconfigc";
+  const pathToAirSdk = settings.path_to_air_sdk;
+  if (!pathToAirSdk) {
+    const errorMsg = "`path_to_air_sdk` is required in settings.";
+    console.error(errorMsg);
+    fs.appendFileSync(problemsFilePath, errorMsg + "\n");
+    return;
+  }
+
+  const tasks = JSON.parse(fs.readFileSync(tasksFilePath));
+  const problems = [];
+
+  tasks.forEach((task) => {
+    const { project_path, project_build_tasks } = task;
+    const vscodePath = path.join(project_path, ".vscode");
+    const vscodeTasksPath = path.join(vscodePath, "tasks.json");
+
+    try {
+      // Ensure `.vscode` folder exists
+      if (!fs.existsSync(vscodePath)) {
+        fs.mkdirSync(vscodePath);
+      }
+
+      // Load or initialize tasks.json
+      let tasksJson = { version: "2.0.0", tasks: [] };
+      if (fs.existsSync(vscodeTasksPath)) {
+        tasksJson = JSON.parse(fs.readFileSync(vscodeTasksPath, "utf-8"));
+      }
+
+      // Filter out existing MASCOT tasks
+      if (purge) {
+        tasksJson.tasks = tasksJson.tasks.filter(
+          (t) => !t.label.startsWith("MASCOT: ")
+        );
+      } else if (tasksJson.tasks.some((t) => t.label.startsWith("MASCOT: "))) {
+        console.log(
+          `Skipping existing MASCOT tasks for project: ${project_path}`
+        );
+        return;
+      }
+
+      // Nested helper function to create one sub-task.
+      function createSubTask(
+        $depProjectPath,
+        $index,
+        $pathToAsconfigc,
+        $pathToAirSdk,
+        $debug,
+        $previousTaskLabel = null
+      ) {
+        const label = `MASCOT: build dependency #${$index + 1} (${
+          $debug ? "debug" : "release"
+        })`;
+        tasksJson.tasks.push({
+          label,
+          type: "shell",
+          command: $pathToAsconfigc,
+          args: [
+            "--sdk",
+            $pathToAirSdk,
+            "--project",
+            $depProjectPath,
+            `--debug=${$debug}`,
+          ],
+          group: { kind: "none", isDefault: false },
+          problemMatcher: [],
+          ...($previousTaskLabel ? { dependsOn: $previousTaskLabel } : {}),
+        });
+        return label;
+      }
+
+      project_build_tasks.pop(); // ignore the master task
+
+      // Add tasks both for debug and release builds
+      [true, false].forEach((debugMode) => {
+        // Add a sub-task for each dependency
+        let previousTaskLabel = null;
+        project_build_tasks.forEach((depProjectPath, index) => {
+          previousTaskLabel = createSubTask(
+            depProjectPath,
+            index,
+            pathToAsconfigc,
+            pathToAirSdk,
+            debugMode,
+            previousTaskLabel
+          );
+        });
+
+        // Add a master task for compiling the project itself.
+        tasksJson.tasks.push({
+          label: `MASCOT: compile ${debugMode ? "debug" : "release"}${
+            project_build_tasks.length ? " (with deps)" : ""
+          }`,
+          type: "actionscript",
+          debug: debugMode,
+          asconfig: "asconfig.json",
+          group: "build",
+          problemMatcher: [],
+          ...(previousTaskLabel ? { dependsOn: previousTaskLabel } : {}),
+        });
+      });
+
+      // Write updated tasks.json
+      fs.writeFileSync(vscodeTasksPath, JSON.stringify(tasksJson, null, 2));
+      console.log(`Updated tasks.json for project: ${project_path}`);
+    } catch (err) {
+      const errorMsg = `Failed to write tasks.json for project: ${project_path}. Error: ${err.message}`;
+      console.error(errorMsg);
+      problems.push(errorMsg);
+    }
+  });
+
+  // Append problems to `problems.log`
+  if (problems.length > 0) {
+    fs.appendFileSync(problemsFilePath, problems.join("\n") + "\n");
+  }
+
+  console.log("VSCode tasks generation complete.");
+}
+
+module.exports = { writeConfig, writeVSCSettings, writeVSCTasks };

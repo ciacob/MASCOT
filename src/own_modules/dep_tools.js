@@ -78,7 +78,9 @@ function buildDependencies(workspaceDir, outputDir, replace = false) {
           coupling.matching_project !== projectPath
       )
       .forEach((coupling) => {
-        if (!projectDeps.project_dependencies.includes(coupling.matching_project)) {
+        if (
+          !projectDeps.project_dependencies.includes(coupling.matching_project)
+        ) {
           projectDeps.project_dependencies.push(coupling.matching_project);
           projectDeps.num_dependencies++;
         }
@@ -148,4 +150,89 @@ function buildDependencies(workspaceDir, outputDir, replace = false) {
   console.log(`Problems logged to ${problemsFilePath}`);
 }
 
-module.exports = { buildDependencies };
+/**
+ * Generates a flat list of build tasks for projects in dependency order.
+ *
+ * @param {string} workspaceDir - Absolute path to the workspace directory.
+ * @param {string} cacheDir - Absolute path to the cache directory where `deps.json` is located.
+ * @param {boolean} [replace=false] - Whether to replace the `tasks.json` file if it exists.
+ */
+function makeBuildTasks(workspaceDir, cacheDir, replace = false) {
+  const depsFilePath = path.join(cacheDir, "deps.json");
+  const tasksFilePath = path.join(cacheDir, "tasks.json");
+  const problemsFilePath = path.join(cacheDir, "problems.log");
+
+  // Ensure `deps.json` exists
+  if (!fs.existsSync(depsFilePath)) {
+    const errorMsg = "`deps.json` is missing. Cannot create build tasks.";
+    console.error(errorMsg);
+    fs.appendFileSync(problemsFilePath, errorMsg + "\n");
+    return;
+  }
+
+  // Check for existing `tasks.json`
+  if (fs.existsSync(tasksFilePath)) {
+    if (!replace) {
+      console.log(
+        "tasks.json already exists. Skipping build tasks generation."
+      );
+      return;
+    } else {
+      fs.unlinkSync(tasksFilePath);
+      console.log("Existing tasks.json deleted. Starting fresh.");
+    }
+  }
+
+  const deps = JSON.parse(fs.readFileSync(depsFilePath));
+  const problems = [];
+  const tasks = [];
+
+  const visited = new Set(); // Tracks projects already processed
+
+  // Helper nested function to recursively collect dependencies via depth-first traversal
+  function collectDependencies(projectPath, collected = []) {
+    // TODO FIXME!!! Handle cyclic dependencies...
+    const project = deps.find((entry) => entry.project_path === projectPath);
+    if (!project) {
+      problems.push(
+        `Missing dependency information for project: ${projectPath}`
+      );
+      return collected;
+    }
+
+    (project.project_dependencies || []).forEach((dependency) => {
+      collectDependencies(dependency, collected); // FIX: 
+      if (!collected.includes(dependency)) {
+        collected.push(dependency);
+      }
+    });
+
+    if (!collected.includes(projectPath)) {
+      collected.push(projectPath);
+    }
+
+    return collected;
+  }
+
+  // Build tasks for each project
+  deps.forEach((project) => {
+    const { project_path } = project;
+
+    // Collect all dependencies, including transitive ones
+    const allDependencies = collectDependencies(project_path);
+
+    tasks.push({
+      project_path,
+      project_build_tasks: allDependencies,
+      num_tasks: allDependencies.length,
+    });
+  });
+
+  // Write tasks.json
+  fs.writeFileSync(tasksFilePath, JSON.stringify(tasks, null, 2));
+  fs.appendFileSync(problemsFilePath, problems.join("\n") + "\n");
+
+  console.log("Build tasks generation complete. Results saved to tasks.json.");
+}
+
+module.exports = { buildDependencies, makeBuildTasks };
