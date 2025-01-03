@@ -41,30 +41,29 @@ function buildDependencies(workspaceDir, outputDir, replace = false) {
   const projectDependencies = {}; // Map of project path to dependency info
   const problems = [];
 
-  // Helper to resolve project paths from file paths
-  function getProjectPath(filePath) {
-    const srcIndex = filePath.lastIndexOf(path.sep + "src" + path.sep);
-    return srcIndex !== -1 ? filePath.substring(0, srcIndex) : null;
-  }
-
   // Populate dependencies and root classes
   classes.forEach((classEntry) => {
     const { analyzed_class, class_couplings } = classEntry;
-    const { file_path, class_couplings: couplings } = classEntry;
-    const projectPath = getProjectPath(analyzed_class.file_path);
-
-    if (!projectPath) {
-      problems.push(`Could not resolve project path for: ${file_path}`);
-      return;
-    }
+    const projectPath = analyzed_class.project_dir;
 
     // Ensure the project is initialized in the dependency map
     if (!projectDependencies[projectPath]) {
+      const root_classes = [];
+      const project = projects.find(
+        (proj) => proj.project_home_dir === projectPath
+      );
+
+      if (project && project.has_descriptor) {
+        root_classes.push(
+          ...project.known_descriptors.map((descObj) => descObj.related_class)
+        );
+      }
+
       projectDependencies[projectPath] = {
         project_path: projectPath,
         project_dependencies: [],
         num_dependencies: 0,
-        root_classes: [],
+        root_classes,
       };
     }
 
@@ -85,56 +84,6 @@ function buildDependencies(workspaceDir, outputDir, replace = false) {
           projectDeps.num_dependencies++;
         }
       });
-  });
-
-  // Identify root classes
-  const classReferenceCounts = {}; // Map of class file paths to reference counts
-
-  // Initialize reference counts for all classes
-  classes.forEach((classEntry) => {
-    classReferenceCounts[classEntry.analyzed_class.file_path] = 0;
-  });
-
-  // Count references to each class within the same project
-  classes.forEach((classEntry) => {
-    const projectPath = getProjectPath(classEntry.analyzed_class.file_path);
-    if (!projectPath) return;
-
-    classEntry.class_couplings.forEach((coupling) => {
-      if (
-        coupling.class_exists &&
-        coupling.matching_project === projectPath &&
-        coupling.expected_class_file in classReferenceCounts
-      ) {
-        classReferenceCounts[coupling.expected_class_file]++;
-      }
-    });
-  });
-
-  // Add root classes to each project
-  classes.forEach((classEntry) => {
-    const { analyzed_class, class_couplings } = classEntry;
-    const { file_path } = analyzed_class;
-    const projectPath = getProjectPath(file_path);
-
-    if (!projectPath) return;
-
-    const projectDeps = projectDependencies[projectPath];
-    const numLocalRefs = classReferenceCounts[file_path];
-
-    if (numLocalRefs === 0) {
-      projectDeps.root_classes.push({
-        file_path,
-        num_couplings: class_couplings.filter(
-          (coupling) => coupling.class_exists && coupling.matching_project
-        ).length,
-      });
-    }
-  });
-
-  // Sort root_classes by num_couplings descending
-  Object.values(projectDependencies).forEach((projectDeps) => {
-    projectDeps.root_classes.sort((a, b) => b.num_couplings - a.num_couplings);
   });
 
   // Sort projects by num_dependencies ascending
@@ -201,7 +150,7 @@ function makeBuildTasks(workspaceDir, cacheDir, replace = false) {
     }
 
     (project.project_dependencies || []).forEach((dependency) => {
-      collectDependencies(dependency, collected); // FIX: 
+      collectDependencies(dependency, collected); // FIX:
       if (!collected.includes(dependency)) {
         collected.push(dependency);
       }

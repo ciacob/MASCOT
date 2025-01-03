@@ -97,10 +97,30 @@ function doShallowScan(workspaceDir, outputDir, replace = false) {
     const descriptorFiles = fs
       .readdirSync(srcPath, { withFileTypes: true })
       .filter((entry) => entry.isFile() && entry.name.endsWith("-app.xml"));
-    const knownDescriptorNames = descriptorFiles
-      .map((dirEnt) => path.basename(dirEnt.name, "-app.xml"))
-      .filter((trimmedDescName) => classNames.includes(trimmedDescName));
-    const hasDescriptor = knownDescriptorNames.length > 0;
+    const knownDescriptors = descriptorFiles
+      .map((entry) => {
+        const name = path.basename(entry.name, "-app.xml");
+        const fileName = entry.name;
+        const filePath = path.join(entry.path, entry.name);
+        const relativeClassPath = classFiles.find((relFilePath) =>
+          relFilePath.startsWith(name)
+        );
+        const classPackage = relativeClassPath? relPathToPackageName(relativeClassPath) : null;
+        return {
+          name,
+          fileName,
+          filePath,
+          relativeClassPath,
+          related_class: {
+            file_path: path.join(entry.path, relativeClassPath),
+            package: classPackage,
+          },
+        };
+      })
+      .filter((descriptorInfo) =>
+        classNames.includes(descriptorInfo.name)
+      );
+    const hasDescriptor = knownDescriptors.length > 0;
 
     // Check for binaries
     let binaryTimestamp = 0;
@@ -145,6 +165,7 @@ function doShallowScan(workspaceDir, outputDir, replace = false) {
       project_name: projectName,
       project_home_dir: projectDir,
       has_descriptor: hasDescriptor,
+      known_descriptors: knownDescriptors,
       has_lib_dir: !!libFolder && hasLibDir,
       has_binaries: hasBinaries,
       has_app_binary: hasAppBinary,
@@ -263,8 +284,9 @@ function doDeepScan(workspaceDir, outputDir, replace = false) {
   // We normalize path separators to forward slashes since all of our class
   // relative paths are normalized this way, and otherwise they would not match.
   const projectFilesMap = {};
+  let projectDir;
   projects.forEach((project) => {
-    const projectDir = project.project_home_dir;
+    projectDir = project.project_home_dir;
     const classFiles = project.classFiles.map((file) =>
       toForwardSlash(path.join(projectDir, "src", file))
     );
@@ -273,6 +295,7 @@ function doDeepScan(workspaceDir, outputDir, replace = false) {
 
   // Analyze each class file
   projects.forEach((project) => {
+    projectDir = project.project_home_dir;
     const srcPath = path.join(project.project_home_dir, "src");
     project.classFiles.forEach((classFileRelative) => {
       const filePath = path.join(srcPath, classFileRelative);
@@ -369,6 +392,7 @@ function doDeepScan(workspaceDir, outputDir, replace = false) {
             package: packageName,
             expected_relative_path: expectedRelativePath,
             path_matches_package: pathMatchesPackage,
+            project_dir: projectDir,
           },
           class_couplings: classCouplings,
         });
