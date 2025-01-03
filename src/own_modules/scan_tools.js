@@ -63,15 +63,25 @@ function doShallowScan(workspaceDir, outputDir, replace = false) {
     // Collect files
     const classFiles = [];
     const assetFiles = [];
+    const classNames = [];
     let codeTimestamp = 0;
 
     function collectFiles(folder) {
       const items = fs.readdirSync(folder, { withFileTypes: true });
       items.forEach((item) => {
-        const fullPath = path.join(folder, item.name);
+        const itemName = item.name;
+        const fullPath = path.join(folder, itemName);
         if (item.isDirectory()) {
           collectFiles(fullPath);
-        } else if (item.name.endsWith(".as")) {
+        } else if (
+          itemName.endsWith(".as") ||
+          itemName.endsWith(".mxml") ||
+          itemName.endsWith(".fxg")
+        ) {
+          const className = itemName.split(".")[0];
+          if (!classNames.includes(className)) {
+            classNames.push(className);
+          }
           classFiles.push(path.relative(srcPath, fullPath));
           const stats = fs.statSync(fullPath);
           codeTimestamp = Math.max(codeTimestamp, stats.mtimeMs, stats.ctimeMs);
@@ -82,11 +92,15 @@ function doShallowScan(workspaceDir, outputDir, replace = false) {
     }
     collectFiles(srcPath);
 
-    // Check for descriptor
+    // Check for descriptor. We only care about descriptors matching one of the
+    // collected class names.
     const descriptorFiles = fs
       .readdirSync(srcPath, { withFileTypes: true })
       .filter((entry) => entry.isFile() && entry.name.endsWith("-app.xml"));
-    const hasDescriptor = descriptorFiles.length > 0;
+    const knownDescriptorNames = descriptorFiles
+      .map((dirEnt) => path.basename(dirEnt.name, "-app.xml"))
+      .filter((trimmedDescName) => classNames.includes(trimmedDescName));
+    const hasDescriptor = knownDescriptorNames.length > 0;
 
     // Check for binaries
     let binaryTimestamp = 0;
@@ -204,6 +218,15 @@ function toForwardSlash(path) {
 }
 
 /**
+ * Converts a relative path to an equivalent package name.
+ * @param {String} relPath
+ * @returns {String} Equivalent package name.
+ */
+function relPathToPackageName(relPath) {
+  return relPath.replace(/\\/g, "/").split("/").slice(0, -1).join(".") || null;
+}
+
+/**
  * Performs a deep scan of ActionScript class files to analyze dependencies and verify alignment between file structure and package declarations.
  * Outputs a `classes.json` catalog of analyzed classes and a `problems.log` file for unresolved dependencies or anomalies.
  *
@@ -253,44 +276,50 @@ function doDeepScan(workspaceDir, outputDir, replace = false) {
     const srcPath = path.join(project.project_home_dir, "src");
     project.classFiles.forEach((classFileRelative) => {
       const filePath = path.join(srcPath, classFileRelative);
-      let className, packageName;
+      const isAsFile = classFileRelative.endsWith(".as");
+      let className, packageName, expectedRelativePath, pathMatchesPackage;
       const classCouplings = [];
 
       try {
         const content = fs.readFileSync(filePath, "utf-8");
+        const inferredPackageName = relPathToPackageName(classFileRelative);
 
-        // Match class and package declarations
-        const packageMatch = content.match(
-          /package\s+([a-zA-Z_$][a-zA-Z0-9_$\.]*)\s*{/
-        );
-        packageName = packageMatch ? packageMatch[1] : null;
-
-        const classMatch = content.match(
-          /class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s+/
-        );
-        className = classMatch ? classMatch[1] : null;
-
-        // Path verification (check if class file whereabouts match its package declaration).
-        const testPackageName =
-          classFileRelative
-            .replace(/\\/g, "/")
-            .split("/")
-            .slice(0, -1)
-            .join(".") || null;
-        const pathMatchesPackage = testPackageName === packageName;
-        const expectedRelativePath = packageToRelPath(packageName, className);
-        if (!pathMatchesPackage) {
-          problems.push(
-            `Class "${className}" (in file: "${toForwardSlash(
-              filePath
-            )}") declares ${
-              packageName ? 'package "' + packageName + '"' : "no package name"
-            } but its actual relative path is "${toForwardSlash(
-              classFileRelative
-            )}", whereas "${toForwardSlash(
-              expectedRelativePath
-            )}" was expected.`
+        if (isAsFile) {
+          // If class is an *.as file, scan its content to find its name and package.
+          const packageMatch = content.match(
+            /package\s+([a-zA-Z_$][a-zA-Z0-9_$\.]*)\s*{/
           );
+          packageName = packageMatch ? packageMatch[1] : null;
+
+          const classMatch = content.match(
+            /class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s+/
+          );
+          className = classMatch ? classMatch[1] : null;
+
+          // Path verification (check if class file whereabouts match its package declaration).
+          pathMatchesPackage = inferredPackageName === packageName;
+          expectedRelativePath = packageToRelPath(packageName, className);
+          if (!pathMatchesPackage) {
+            problems.push(
+              `Class "${className}" (in file: "${toForwardSlash(
+                filePath
+              )}") declares ${
+                packageName
+                  ? 'package "' + packageName + '"'
+                  : "no package name"
+              } but its actual relative path is "${toForwardSlash(
+                classFileRelative
+              )}", whereas "${toForwardSlash(
+                expectedRelativePath
+              )}" was expected.`
+            );
+          }
+        } else {
+          // Otherwise (if class is an *.mxml or *.fxg file), rely on file whereabouts only.
+          className = path.basename(classFileRelative).split(".")[0];
+          packageName = inferredPackageName;
+          expectedRelativePath = classFileRelative;
+          pathMatchesPackage = true;
         }
 
         // Find imports
@@ -381,21 +410,22 @@ function resolveDependency(
   parentClassName,
   parentClassPath
 ) {
-  const expectedRelativePath = packageToRelPath(packageName, className);
+  const inferredRelativePath = packageToRelPath(packageName, className);
   let found = false;
 
   for (const [projectDir, classFiles] of Object.entries(projectFilesMap)) {
-    if (classFiles.some((file) => file.endsWith(expectedRelativePath))) {
+    if (classFiles.some((file) => file.endsWith(inferredRelativePath))) {
       const expectedClassFile = path.join(
         projectDir,
         "src",
-        expectedRelativePath
+        inferredRelativePath
       );
+
       if (fs.existsSync(expectedClassFile)) {
         classCouplings.push({
           name: className,
           package: packageName,
-          expected_relative_path: expectedRelativePath,
+          expected_relative_path: inferredRelativePath,
           coupling_type: couplingType,
           matching_project: projectDir,
           expected_class_file: expectedClassFile,
@@ -411,7 +441,7 @@ function resolveDependency(
     classCouplings.push({
       name: className,
       package: packageName,
-      expected_relative_path: expectedRelativePath,
+      expected_relative_path: inferredRelativePath,
       coupling_type: couplingType,
       matching_project: null,
       expected_class_file: null,

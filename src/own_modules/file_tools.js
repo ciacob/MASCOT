@@ -108,8 +108,7 @@ function writeConfig(
           projectType === "lib"
             ? `${defaultValues.bin_dir}/${sanitizeFileName(project_name)}.swc`
             : `${defaultValues.bin_dir}/${mainClass}.swf`,
-        "source-path": [defaultValues.src_dir],
-        "include-sources": [defaultValues.src_dir],
+        "source-path": [defaultValues.src_dir]
       },
     };
 
