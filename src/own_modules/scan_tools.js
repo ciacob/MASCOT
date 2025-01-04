@@ -99,26 +99,26 @@ function doShallowScan(workspaceDir, outputDir, replace = false) {
       .filter((entry) => entry.isFile() && entry.name.endsWith("-app.xml"));
     const knownDescriptors = descriptorFiles
       .map((entry) => {
-        const name = path.basename(entry.name, "-app.xml");
-        const fileName = entry.name;
-        const filePath = path.join(entry.path, entry.name);
+        const descName = path.basename(entry.name, "-app.xml");
+        const descFileName = entry.name;
+        const descFilePath = path.join(entry.path, entry.name);
         const relativeClassPath = classFiles.find((relFilePath) =>
-          relFilePath.startsWith(name)
+          relFilePath.startsWith(descName)
         );
-        const classPackage = relativeClassPath? relPathToPackageName(relativeClassPath) : null;
+
         return {
-          name,
-          fileName,
-          filePath,
+          descName,
+          descFileName,
+          descFilePath,
           relativeClassPath,
           related_class: {
             file_path: path.join(entry.path, relativeClassPath),
-            package: classPackage,
+            descriptor_file_path: descFilePath,
           },
         };
       })
       .filter((descriptorInfo) =>
-        classNames.includes(descriptorInfo.name)
+        classNames.includes(descriptorInfo.descName)
       );
     const hasDescriptor = knownDescriptors.length > 0;
 

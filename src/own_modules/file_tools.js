@@ -88,6 +88,13 @@ function writeConfig(
           : "Main"
         : undefined;
 
+    const appDescriptor =
+      projectType === "app"
+        ? root_classes.length > 0
+          ? root_classes[0].descriptor_file_path
+          : undefined
+        : undefined;
+
     // Resolve library paths
     const libraryPath = [
       ...(has_lib_dir ? ["lib"] : []),
@@ -99,7 +106,9 @@ function writeConfig(
     // Build `asconfig.json` structure
     const asConfig = {
       config: defaultValues.config_type,
-      ...(projectType === "app" ? { type: "app", mainClass } : { type: "lib" }),
+      ...(projectType === "app"
+        ? { type: "app", mainClass, application: appDescriptor }
+        : { type: "lib" }),
       copySourcePathAssets: defaultValues.copy_assets,
       compilerOptions: {
         debug: defaultValues.debug_mode,
@@ -108,7 +117,10 @@ function writeConfig(
           projectType === "lib"
             ? `${defaultValues.bin_dir}/${sanitizeFileName(project_name)}.swc`
             : `${defaultValues.bin_dir}/${mainClass}.swf`,
-        "source-path": [defaultValues.src_dir]
+        ...(projectType === "lib"
+          ? { "include-sources": [defaultValues.src_dir] }
+          : {}),
+        "source-path": [defaultValues.src_dir],
       },
     };
 
