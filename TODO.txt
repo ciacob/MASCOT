@@ -1,8 +1,0 @@
-1. suport pentru clase MXML;
-2. suport pentru listarea claselor dintr-un SWC;
-3. suport pentru clasele furnizate de SDK
-Nota: toate clasele din categoriile 1-3 acum apar ca dependinte nerezolvate.
-4. Suport pentru "application descriptor", inclusiv generarea lui daca nu exista.
-5. Logica mai buna pentru detectarea clasei de baza (eng.: Main class);
-6. Logica mai buna pentru deosebirea proiectelor de tip library de proiectele de tip application.
-7. Imbunatateste logica pentru detectarea fisierului descriptor. Acum daca gaseste orice are se termina in -app.xml, considera ca exista un descriptor, fara sa se uite daca numele de fisier (ceea ce e inainte de "-app") reflecta una dintre clasele din proiect. Daca tot esti aici, seteaza respectivul nume, in caz ca e o clasa din proiect, ca MAIN CLASS (pentru un proiect de tip application).
