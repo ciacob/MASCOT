@@ -9,6 +9,8 @@ const {
   writeVSCSettings,
   writeVSCTasks,
 } = require("./own_modules/file_tools");
+const { manuallyAddDependencies } = require("./own_modules/patch_tools");
+
 const os = require("os");
 
 function isWin() {
@@ -48,10 +50,19 @@ const repoLanguages = ["ActionScript"];
   // if (!dry_run_mode) {
   doShallowScan(workspace_dir, cache_dir, true);
   doDeepScan(workspace_dir, cache_dir, true);
+
+  manuallyAddDependencies(workspace_dir, cache_dir, [
+    {
+      project: `${workspace_dir}/maidens`,
+      dependencies: [`${workspace_dir}/abc2svg-as3-library`],
+    },
+  ]);
+
   buildDependencies(workspace_dir, cache_dir, true);
   writeConfig(workspace_dir, cache_dir, true);
   writeVSCSettings(workspace_dir, cache_dir, { $sdk: flex_sdk_dir }, true);
   makeBuildTasks(workspace_dir, cache_dir, true);
+
   writeVSCTasks(
     workspace_dir,
     cache_dir,
