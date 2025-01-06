@@ -5,7 +5,7 @@ const {
   splitQualifiedName,
   toForwardSlash,
   relPathToPackageName,
-} = require ('./utils');
+} = require("./utils");
 
 /**
  * Performs a shallow scan of the workspace to identify ActionScript projects.
