@@ -134,4 +134,4 @@ doShallowScan ('/path/to/workspace_dir', '/path/to/cache_dir', true);
 Please refer to the specific [source files](https://github.com/ciacob/MASCOT/tree/master/src/own_modules) on GitHub for the documentation of each of the above mentioned functions.
 
 ## 3. Releases
-Make sure to frequently check the [Releases](https://github.com/ciacob/MASCOT/releases) section on GitHub for information on the changes, known issues and limitations of each released version of **MASCOT**. The version currently on the `master` GitHub branch should be considered _nightly build_, and its use is discouraged.
+Make sure to frequently check the [Releases](https://github.com/ciacob/MASCOT/releases) section on GitHub for information on the changes, known issues and limitations of each released version of **MASCOT**. The version currently on the `master` GitHub branch should be considered as _nightly build_, and its use is discouraged.
