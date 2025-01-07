@@ -97,13 +97,10 @@ Remember that you can review all of the above at run time, by doing:
 mascot-app --h
 ```
 > **Note**: the **c_programming_languages** and **g_manual_dependencies** pose significant challenges when given from the command line, which is why it is strongly recommended to always pass them through the configuration file. For example, in Windows, to tell MASCOT to only clone the GitHub repositories that match the programming languages _ActionScript_ and _HTML_, you would have to pass, from the command line: 
-<br/>
 `--c_pl="[\"ActionScript\", \"HTML\"]"`
-<br/>
->whereas, in the configuration file, you would simply give:
-<br/>
+whereas, in the configuration file, you would simply give:
 `"c_programming_languages":["ActionScript", "HTML"]`
-<br/>which is a lot more convenient.
+which is a lot more convenient.
 
 > **Note**: while short names should work in the configuration file too, it is recommended to use the long names instead, since they improve the file readability and  maintainability (and you anyhow only need to type them once, in-there).
 
