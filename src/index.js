@@ -1,73 +1,85 @@
-const { cloneRepos } = require("./own_modules/clone_tools");
-const { doShallowScan, doDeepScan } = require("./own_modules/scan_tools");
-const {
-  buildDependencies,
-  makeBuildTasks,
-} = require("./own_modules/dep_tools");
-const {
-  writeConfig,
-  writeVSCSettings,
-  writeVSCTasks,
-} = require("./own_modules/file_tools");
-const { manuallyAddDependencies } = require("./own_modules/patch_tools");
+const { wrapAndRun } = require("cli-primer");
+const { cliMain } = require("./own_modules/core");
 
-const os = require("os");
-
-function isWin() {
-  return os.platform() === "win32";
-}
-
-// MAIN
-const dry_run_mode = true;
-
-const workspace_dir = isWin()
-  ? "d:\\_DEV_\\github\\actionscript"
-  : "/Users/ciacob/_DEV_/github/actionscript";
-
-const cache_dir = isWin()
-  ? "d:\\_DEV_\\github\\nodejs\\MASCOT\\cache"
-  : "/Users/ciacob/_DEV_/github/node_js/MASCOT/cache";
-
-const air_sdk_dir = isWin()
-  ? "D:\\_BUILD_\\AS3\\AIRSDK_51.1.3"
-  : "/Users/ciacob/_DEV_/SDKs/AIRSDK_51.1.3";
-
-const flex_sdk_dir = isWin()
-  ? "d:\\_BUILD_\\AS3\\AIR_51.1.3_Flex_4.16.1\\bin"
-  : "";
-
-const userName = "ciacob";
-const repoLanguages = ["ActionScript"];
-(async function () {
-  const report = await cloneRepos(
-    workspace_dir,
-    userName,
-    repoLanguages,
-    undefined,
-    dry_run_mode
-  );
-  // console.dir(report, { depth: null });
-  // if (!dry_run_mode) {
-  doShallowScan(workspace_dir, cache_dir, true);
-  doDeepScan(workspace_dir, cache_dir, true);
-
-  manuallyAddDependencies(workspace_dir, cache_dir, [
-    {
-      project: `${workspace_dir}/maidens`,
-      dependencies: [`${workspace_dir}/abc2svg-as3-library`],
+const settings = {
+  showDebugMessages: false,
+  useOutputDir: false,
+  useSessionControl: false,
+  useHelp: true,
+  useConfig: true,
+  configTemplate: JSON.stringify({
+    appInfo: {
+      appName: "{{name}}",
+      appAuthor: "{{author}}",
+      appVersion: "{{version}}",
+      appDescription: "{{description}}",
     },
-  ]);
+  }),
+  argsDictionary: [
+    {
+      name: "Workspace Directory",
+      payload: /^--(workspace_directory|wd)=(.+)$/,
+      doc: "The directory where actionscript projects live. Also the directory where GitHub repositories are cloned, if requested. Mandatory; set this via configuration file, preferably.",
+      mandatory: true,
+    },
 
-  buildDependencies(workspace_dir, cache_dir, true);
-  writeConfig(workspace_dir, cache_dir, true);
-  writeVSCSettings(workspace_dir, cache_dir, { $sdk: flex_sdk_dir }, true);
-  makeBuildTasks(workspace_dir, cache_dir, true);
+    {
+      name: "Clone",
+      payload: /^--(clone|c)$/,
+      doc: "If given, causes MASCOT to attempt to clone some GitHub repositories. Behavior is controlled via the `c_` arguments.",
+    },
 
-  writeVSCTasks(
-    workspace_dir,
-    cache_dir,
-    { path_to_air_sdk: flex_sdk_dir },
-    true
-  );
-  // }
+    {
+      name: "Clone: User name",
+      payload: /^--(c_user_name|c_un)=(.+)$/,
+      doc: "The user name to use when cloning GitHub repositories. Mandatory if `--clone` was also given; set this via configuration file, preferably.",
+    },
+
+    {
+      name: "Clone: Forks behavior",
+      payload: /^--(c_forks_behavior|c_fb)=(exclude|only|mix)$/,
+      doc: 'Sets what will happen with forks when cloning repositories. One of "exclude" (forks will not be cloned), "only" (just the forks will be cloned), or "mix" (default: both forks and non-forks will be cloned). Set this via configuration file, preferably.',
+    },
+
+    {
+      name: "Clone: Programming languages",
+      payload: /^--(c_programming_languages|c_pl)=(.+)$/,
+      doc: 'Optional JSON Array literal of up to three programming language names to filter cloned repositories by, e.g.: \'["ActionScript", "HTML"]\'; set this via configuration file, preferably.',
+    },
+
+    {
+      name: "Clone: Dry mode",
+      payload: /^--(c_dry_mode|c_dm)=(yes|no)$/,
+      doc: 'Sets whether to actually download the files when cloning ("yes", the default) or just print information the the console ("no"), without writing anything to disk.',
+    },
+
+    {
+      name: "Generate",
+      payload: /^--(generate|g)$/,
+      doc: "If given, causes MASCOT to generate `asconfig.json` and other related files. Behavior is controlled via the `g_` arguments.",
+    },
+
+    {
+      name: "Generate: SDK directory",
+      payload: /^--(g_sdk_directory|g_sdk)=(.+)$/,
+      doc: "The directory where the AIR ActionScript SDK lives. For pure AIR SDKs, this is the root folder; for FLEX & AIR combined SDKs, this is the `bin` sub-folder. Mandatory if `generate` was also given; set this via configuration file, preferably.",
+    },
+
+    {
+      name: "Generate: Manual dependencies",
+      payload: /^--(g_manual_dependencies|g_md)=(.+)$/,
+      doc: "Optional JSON Array literal of Objects having each the keys `project` (String) and `dependencies` (Array of Strings). All strings are absolute paths to projects living under the `Workspace Directory`. Up to but not including the `src` folder. All given `dependencies` will be added to `project`. Set this via configuration file, preferably.",
+    }
+  ],
+  intrinsicDefaults: {
+    c_forks_behavior: "mix",
+    c_dry_mode: "no",
+  },
+};
+
+(async function () {
+  const exitValue = await wrapAndRun(settings, cliMain);
+  if ([0, 1, 2].includes(exitValue)) {
+    process.exit(exitValue);
+  }
 })();

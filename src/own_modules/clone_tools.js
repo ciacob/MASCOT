@@ -1,5 +1,6 @@
 const shell = require("shelljs");
 const axios = require("axios");
+const path = require("path");
 
 /**
  * Clones a GitHub user's repositories to a local directory, with enhanced filtering, reporting, and error handling.
@@ -98,7 +99,7 @@ async function cloneRepos(
     for (const repo of repos) {
       const cloneUrl = repo.clone_url;
       const repoName = repo.name;
-      const targetPath = `${targetDir}/${repoName}`;
+      const targetPath = path.normalize(path.join(targetDir, repoName));
 
       const cloneResult = await cloneRepo(cloneUrl, repoName, targetPath);
 
@@ -127,10 +128,14 @@ async function cloneRepos(
     console.log("Cloning process complete.");
   } catch (error) {
     report.report.listingResult = "failure";
-    report.report.listingFailureDetail = error;
-    console.error("Error fetching repositories:", error);
-  }
 
+    const errMsg = `${error.message}${
+      error.message.includes("ENOTFOUND api.github.com")
+        ? " (are you online?)"
+        : ""
+    }`;
+    report.report.listingFailureDetail = errMsg;
+  }
   return report;
 }
 
