@@ -4,7 +4,7 @@
 
 **MASCOT** streamlines the process of managing large ActionScript codebases by analyzing coupling relationships between all the classes found in all the projects of a set workspace. From here, projects dependency relationships are inferred, and configuration files are automatically generated for every project in the workspace. With these configuration files in place, building an arbitrary ActionScript project in the workspace is as simple as:
 - Opening the project in Visual Studio Code.
-- Triggering the _build tasks_ menu (**Ctrl+B** or **Cmd+B** by default).
+- Triggering the _build tasks_ menu (**Ctrl+Shift+B** or **Cmd+Shift+B** by default).
 - Choosing, e.g.: **MASCOT: compile debug (with deps)**.
 
 ![MASCOT - build tasks](img/mascot-build-tasks.png)
