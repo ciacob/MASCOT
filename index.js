@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const { wrapAndRun } = require("cli-primer");
 const { cliMain } = require("./own_modules/core");
 
