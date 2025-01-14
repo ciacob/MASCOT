@@ -337,6 +337,8 @@ function writeVSCTasks(workspaceDir, cacheDir, settings, purge = false) {
         return label;
       }
 
+      const isRebuild = project_build_tasks.length === 0;
+
       project_build_tasks.pop(); // ignore the master task
 
       // Add tasks both for debug and release builds
@@ -357,7 +359,11 @@ function writeVSCTasks(workspaceDir, cacheDir, settings, purge = false) {
         // Add a master task for compiling the project itself.
         tasksJson.tasks.push({
           label: `MASCOT: compile ${debugMode ? "debug" : "release"}${
-            project_build_tasks.length ? " (with deps)" : ""
+            project_build_tasks.length
+              ? " (with deps)"
+              : isRebuild
+              ? " (not needed)"
+              : ""
           }`,
           type: "actionscript",
           debug: debugMode,

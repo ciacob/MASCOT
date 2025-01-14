@@ -4,6 +4,7 @@ const { cloneRepos, cloneRepo } = require("./clone_tools");
 const { doShallowScan, doDeepScan } = require("./scan_tools");
 const { manuallyAddDependencies } = require("./patch_tools");
 const { buildDependencies, makeBuildTasks } = require("./dep_tools");
+const { applyDirtinessFilter } = require("./dirty_tools");
 const {
   writeConfig,
   writeVSCSettings,
@@ -38,7 +39,6 @@ const {
  *        - `data` (Object, optional): Additional data related to the message, displayed as an object.
  */
 function cliMain(inputData, utils, monitoringFn) {
-
   const $m = monitoringFn || function () {};
 
   // VALIDATE & PRE_PROCESS INPUT
@@ -217,6 +217,11 @@ function cliMain(inputData, utils, monitoringFn) {
       // Create a blueprint for the actual build tasks to be generated.
       makeBuildTasks(workspace_directory, scratchDirPath, true);
 
+      // Handle the `--g_rebuild` argument.
+      if (!inputData.g_rebuild) {
+        applyDirtinessFilter(workspace_directory, scratchDirPath);
+      }
+
       // Update the `.vscode/tasks.json` of each ActionScript project in the workspace, so that it
       // includes tasks with building the current project and all dependencies, in one go.
       writeVSCTasks(
@@ -238,6 +243,7 @@ module.exports = {
   manuallyAddDependencies,
   buildDependencies,
   makeBuildTasks,
+  applyDirtinessFilter,
   writeConfig,
   writeVSCSettings,
   writeVSCTasks,

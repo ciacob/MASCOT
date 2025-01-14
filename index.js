@@ -60,6 +60,12 @@ const settings = {
     },
 
     {
+      name: "Generate: Rebuild",
+      payload: /^--(g_rebuild|g_r)$/,
+      doc: "If given, generated `tasks.json` will not account for unchanged projects, and will not omit them from building. By default, only changed projects are built. All direct and indirect dependencies are scanned when determining whether a project was changed. You MUST use this argument when switching form a debug build to a release build or vice-versa.",
+    },
+
+    {
       name: "Generate: SDK directory",
       payload: /^--(g_sdk_directory|g_sdk)=(.+)$/,
       doc: "The directory where the AIR ActionScript SDK lives. For pure AIR SDKs, this is the root folder; for FLEX & AIR combined SDKs, this is the `bin` sub-folder. Mandatory if `generate` was also given; set this via configuration file, preferably.",
