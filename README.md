@@ -86,6 +86,7 @@ Remember that, in order to provide a configuration value via the command line, *
 **c_programming_languages** | **c_pl** | `/^--(c_programming_languages\|c_pl)=(.+)$/` | Optional JSON Array literal of up to three programming language names to filter cloned repositories by, e.g.: `["ActionScript", "HTML"]`; set this via configuration file, preferably.
 **c_dry_mode** | **c_dm** | `/^--(c_dry_mode\|c_dm)=(yes\|no)$/` | Sets whether to actually download the files when cloning (**yes**, the default) or just print information the the console (**no**), without writing anything to disk. Accepted values: **yes**, **no**.
 **generate** | **g** | `/^--(generate\|g)$/` | If given, causes MASCOT to generate `asconfig.json` and other related files. Behavior is controlled via the `g_` arguments.
+**g_rebuild** | **g_r** | `/^--(g_rebuild\|g_r)$/` | If given, generated `tasks.json` will not skip unchanged projects, thus causing everything to be rebuilt, changed or not. By default, only changed projects are built. All direct and indirect dependencies are scanned when determining whether a project was changed. You _must_ use this argument when switching form a _debug_ build to a _release_ build or vice-versa.
 **g_sdk_directory** | **g_sdk** | `/^--(g_sdk_directory\|g_sdk)=(.+)$/` | The directory where the AIR ActionScript SDK lives. For pure AIR SDKs, this is the root folder; for FLEX & AIR combined SDKs, this is the `bin` sub-folder. Mandatory if `generate` was also given; set this via configuration file, preferably.
 **g_manual_dependencies** | **g_md** | `/^--(g_manual_dependencies\|g_md)=(.+)$/` | Optional JSON Array literal of Objects having each one the keys `project` (String) and `dependencies` (Array of Strings). All strings are absolute paths to projects living under the **workspace_directory**. Up to, but not including the `src` folder. All given `dependencies` will be added to `project`. Set this via configuration file, preferably.
 **help** | **h** | `/^--(help\|h)$/` | Displays information about the program's input parameters and exits.
@@ -106,6 +107,26 @@ which is a lot more convenient.
 
 > **Note**: MASCOT has a small GitHub batch cloning functionality, accessible via `--clone` (or `--c`), and configurable via the `--c_...` arguments. If you intend to use this functionality, it is recommended to set it up from the configuration file (e.g., define in-there `c_user_name`, `c_programming_languages`, etc.), and only trigger the actual cloning when needed, by passing `--c` from the command line.
 
+### 1.4. Selective Building
+From v.1.0.2, MASCOT supports **selective building**, and it is the **default behavior**. This functionality **prevents compilation of unchanged code**, which dramatically improves building speed in projects with a significant number of dependencies. MASCOT analyses the full dependencies hierarchy of the current project, and only generates building tasks for those dependency branches that contain at least one _dirty_ project.
+
+> **Note**: a project is to be considered _dirty_ if at least one of its source files have been more recently changed than its _binary file_ (a `*.swf` or `*.swc` living in the `bin` folder, based on project type). If there is no binary file, the project is considered _dirty_ as well.
+
+While build tasks for clean dependencies are omitted, a build task for the root project is always generated, even if it has no changes. If this is the case, the "**not needed**" suffix is added to the build task name.
+
+![MASCOT - project is unchanged](img/mascot-current-project-clean.png)
+
+If you need to **force recompilation** of a clean project, together with recompilation of all its dependencies, use the `--g_rebuild` argument (or `--g_r`):
+```bash
+mascot-app --g --g_r
+```
+This will generate the build tasks to recompile everything, changed or not. 
+
+> **Note**: **You must always rebuild** when switching from `compile debug` to `compile release` or vice-versa, or otherwise you risk creating a _mixed build_. **Debug binary code** runs slower due to all additional hooks and information in-there (i.e., stack-traces), while **release binary code** fails to display trace messages and doesn't connect to the debugger. Each can create unexpected results when placed in the wrong context, so its way better to rebuild when switching build type.
+
+> Note: MASCOT only analyzes your workspace when invoked via `mascot-app --g`. You **must** call `mascot-app --g` prior to executing any of the `MASCOT: compile...` tasks, otherwise MASCOT might use an obsolete context (e.g., considering a dependency project is _clean_ while it is actually _dirty_, which would result in an outdated dependency binary being used).
+
+
 ## 2. Using MASCOT From Code
 MASCOT is also a CommonJS module. For your convenience, the `own_modules/core.js` module re-exports in one place all the functions exported by all the other modules, so in order to access the API of MASCOT in your code you could simply install it locally:
 ```bash
@@ -121,6 +142,7 @@ MASCOT is also a CommonJS module. For your convenience, the `own_modules/core.js
   manuallyAddDependencies,
   buildDependencies,
   makeBuildTasks,
+  applyDirtinessFilter,
   writeConfig,
   writeVSCSettings,
   writeVSCTasks,
