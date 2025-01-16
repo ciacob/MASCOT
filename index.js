@@ -70,7 +70,7 @@ const settings = {
     {
       name: "Generate: SDK directory",
       payload: /^--(g_sdk_directory|g_sdk)=(.+)$/,
-      doc: "The directory where the AIR ActionScript SDK lives. For pure AIR SDKs, this is the root folder; for FLEX & AIR combined SDKs, this is the `bin` sub-folder. Mandatory if `generate` was also given; set this via configuration file, preferably.",
+      doc: "The directory where the AIR ActionScript SDK lives. Mandatory if `generate` was also given; set this via configuration file, preferably.",
     },
 
     {
