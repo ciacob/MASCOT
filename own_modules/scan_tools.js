@@ -110,7 +110,7 @@ function doShallowScan(workspaceDir, outputDir, replace = false) {
         const descFilePath = path.join(entry.path, entry.name);
         const relativeClassPath = classFiles.find((relFilePath) =>
           relFilePath.startsWith(descName)
-        );
+        ) || '';
 
         return {
           descName,
