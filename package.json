@@ -1,6 +1,6 @@
 {
   "name": "mascot-app",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Master ActionScript COnfigurator Tool. MASCOT automatically resolves ActionScript project dependencies and generates `asconfig.json` files for easy compilation with `asconfigc`.",
   "main": "index.js",
   "bin": {
