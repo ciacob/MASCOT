@@ -1,3 +1,5 @@
+![MASCOT - identity image](img/identity.jpg)
+
 # MASCOT
 ### **M**aster **A**ction**S**cript **C**onfiguration **O**ptimizer **T**ool
 #### **MASCOT** automatically resolves ActionScript project dependencies and generates `asconfig.json`, `settings.json` and `tasks.json` files for easier setup and compilation with [Josh Tynjala](https://www.patreon.com/josht)'s [ActionScript & MXML](https://as3mxml.com) extension for [Visual Studio Code](https://code.visualstudio.com/).
