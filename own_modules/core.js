@@ -206,7 +206,7 @@ function cliMain(inputData, utils, monitoringFn) {
       buildDependencies(workspace_directory, scratchDirPath, true);
 
       // Actually generate one `asconfig.json` file for each ActionScript project in the workspace.
-      writeConfig(workspace_directory, scratchDirPath, true);
+      writeConfig(workspace_directory, scratchDirPath, true, null, inputData.g_asconfig_base);
 
       // Ensure each ActionScript project in the workspace has a `.vscode/settings.json` file containing,
       // at the very least the path to the AIR SDK to use.

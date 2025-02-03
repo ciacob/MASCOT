@@ -1,20 +1,43 @@
 const fs = require("fs");
 const path = require("path");
+const { deepMergeData } = require("cli-primer");
 
 /**
  * Generates `asconfig.json` files for projects listed in `projects.json`.
  * Outputs one `asconfig.json` file in the root of each project directory.
  *
- * @param {string} workspaceDir - Absolute path to the folder where repositories are cloned.
- * @param {string} cacheDir - Absolute path to the folder where `projects.json`, `classes.json`, and `deps.json` are stored.
- * @param {boolean} [overwrite=false] - Whether to overwrite existing `asconfig.json` files.
- * @param {Object|null} [defaults=null] - Default values for constant placeholders.
+ * @param {string} workspaceDir
+ *        Absolute path to the folder where repositories are cloned.
+ *
+ * @param {string} cacheDir
+ *        Absolute path to the folder where `projects.json`, `classes.json`, and `deps.json`
+ *        are stored.
+ *
+ * @param {boolean} [overwrite=false]
+ *        Whether to overwrite existing `asconfig.json` files.
+ *
+ * @param {Object|null} [defaults=null]
+ *        Optional. Object containing one or more of the following keys: `config_type`,
+ *        `copy_assets`, `bin_dir`, `src_dir`. If not given, the following are assumed:
+ *         {
+ *           config_type: "air",
+ *           copy_assets: true,
+ *           bin_dir: "bin",
+ *           src_dir: "src",
+ *         }
+ *
+ * @param {Object|null} [base = null]
+ *        Optional. Object containing a base/blueprint version of `asconfig` data to use.
+ *        Any build-related settings in-here will be overwritten, but everything else will
+ *        be kept verbatim (e.g., packaging settings, or specific compiler flags, e.g.,
+ *        `advanced-telemetry`).
  */
 function writeConfig(
   workspaceDir,
   cacheDir,
   overwrite = false,
-  defaults = null
+  defaults = null,
+  base = null
 ) {
   const projectsFilePath = path.join(cacheDir, "projects.json");
   const classesFilePath = path.join(cacheDir, "classes.json");
@@ -41,7 +64,6 @@ function writeConfig(
 
   // Apply defaults
   const defaultValues = {
-    debug_mode: true,
     config_type: "air",
     copy_assets: true,
     bin_dir: "bin",
@@ -104,7 +126,8 @@ function writeConfig(
     ];
 
     // Build `asconfig.json` structure
-    const asConfig = {
+    const asConfigInherited = base || {};
+    const asConfigOwn = {
       config: defaultValues.config_type,
       ...(projectType === "app"
         ? { type: "app", mainClass, application: appDescriptor }
@@ -123,6 +146,7 @@ function writeConfig(
         "source-path": [defaultValues.src_dir],
       },
     };
+    const asConfig = deepMergeData(asConfigInherited, asConfigOwn);
 
     // Write `asconfig.json`
     try {
