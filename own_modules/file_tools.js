@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { deepMergeData } = require("cli-primer");
+const { groupWorkersByRepositories } = require("./utils");
 
 /**
  * Generates `asconfig.json` files for projects listed in `projects.json`.
@@ -31,13 +32,28 @@ const { deepMergeData } = require("cli-primer");
  *        Any build-related settings in-here will be overwritten, but everything else will
  *        be kept verbatim (e.g., packaging settings, or specific compiler flags, e.g.,
  *        `advanced-telemetry`).
+ *
+ * @param {Object[]|null} [externalWorkers = null]
+ *        Optional. List of external workers (ActionScript workers living in their own
+ *        dedicated project), in the format:
+ *        {
+ *          project: "/path/to/worker/home",
+ *          workerFile: "/path/to/worker/home/MyWorker.as",
+ *          workerOutput: "/path/to/expected/Worker.swf"
+ *        }
+ *
+ * @param {Object[]|null} [internalWorkers = null]
+ *        Optional. List of internal workers (ActionScript workers living in the project of
+ *        another application or library). Format is the same as for `externalWorkers`.
  */
 function writeConfig(
   workspaceDir,
   cacheDir,
   overwrite = false,
   defaults = null,
-  base = null
+  base = null,
+  externalWorkers = null,
+  internalWorkers = null
 ) {
   const projectsFilePath = path.join(cacheDir, "projects.json");
   const classesFilePath = path.join(cacheDir, "classes.json");
@@ -125,6 +141,27 @@ function writeConfig(
       ),
     ];
 
+    // If the current project is an external worker project, grab its
+    // worker specific information.
+    const externalWorkerInfo =
+      externalWorkers && externalWorkers.length
+        ? externalWorkers.find(
+            (workerInfo) => workerInfo.project === projectPath
+          ) || null
+        : null;
+
+    // Determine the internal workers that need to be added to the
+    // "workers" section of the `asconfig.json` file of the current project.
+    const internalWorkersList =
+      internalWorkers && internalWorkers.length
+        ? internalWorkers
+            .filter((workerInfo) => workerInfo.project === projectPath)
+            .map((ownInternalWorker) => ({
+              file: ownInternalWorker.workerFile,
+              output: ownInternalWorker.workerOutput,
+            }))
+        : null;
+
     // Build `asconfig.json` structure
     const asConfigInherited = base || {};
     const asConfigOwn = {
@@ -139,11 +176,16 @@ function writeConfig(
         output:
           projectType === "lib"
             ? `${defaultValues.bin_dir}/${sanitizeFileName(project_name)}.swc`
+            : externalWorkerInfo
+            ? externalWorkerInfo.workerOutput
             : `${defaultValues.bin_dir}/${mainClass}.swf`,
         ...(projectType === "lib"
           ? { "include-sources": [defaultValues.src_dir] }
           : {}),
         "source-path": [defaultValues.src_dir],
+        ...(internalWorkersList && internalWorkersList.length
+          ? { workers: internalWorkersList }
+          : {}),
       },
     };
     const asConfig = deepMergeData(asConfigInherited, asConfigOwn);

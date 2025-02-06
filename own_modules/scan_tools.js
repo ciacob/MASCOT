@@ -11,11 +11,25 @@ const {
  * Performs a shallow scan of the workspace to identify ActionScript projects.
  * Outputs a `projects.json` catalog containing metadata for each project and a `problems.log` file for anomalies.
  *
- * @param {string} workspaceDir - The directory containing cloned repositories.
- * @param {string} outputDir - The directory to save `projects.json` and `problems.log`.
- * @param {boolean} [replace=false] - Whether to overwrite existing `projects.json` if found.
+ * @param {string} workspaceDir
+ *        The directory containing cloned repositories.
+ *
+ * @param {string} outputDir
+ *        The directory to save `projects.json` and `problems.log`.
+ *
+ * @param {boolean} [replace=false]
+ *        Whether to overwrite existing `projects.json` if found.
+ *
+ * @param {boolean} [appsWhiteList=null]
+ *        Optional list of project directories always considered applications, bypassing type checks.
  */
-function doShallowScan(workspaceDir, outputDir, replace = false) {
+function doShallowScan(
+  workspaceDir,
+  outputDir,
+  replace = false,
+  appsWhiteList = null
+) {
+  workspaceDir = path.resolve(workspaceDir);
   const projectsFilePath = path.join(outputDir, "projects.json");
   const problemsFilePath = path.join(outputDir, "problems.log");
 
@@ -108,9 +122,9 @@ function doShallowScan(workspaceDir, outputDir, replace = false) {
         const descName = path.basename(entry.name, "-app.xml");
         const descFileName = entry.name;
         const descFilePath = path.join(entry.path, entry.name);
-        const relativeClassPath = classFiles.find((relFilePath) =>
-          relFilePath.startsWith(descName)
-        ) || '';
+        const relativeClassPath =
+          classFiles.find((relFilePath) => relFilePath.startsWith(descName)) ||
+          "";
 
         return {
           descName,
@@ -154,8 +168,15 @@ function doShallowScan(workspaceDir, outputDir, replace = false) {
     // Determine dirtiness
     const isDirty = codeTimestamp > binaryTimestamp;
 
-    // Determine app probability
-    const isAppProbability = hasDescriptor || hasAppBinary ? 1 : 0;
+    // Determine the probability that the current project is an application.
+    const isAppProbability =
+      appsWhiteList &&
+      appsWhiteList.length &&
+      appsWhiteList.includes(projectDir)
+        ? 1
+        : hasDescriptor || hasAppBinary
+        ? 1
+        : 0;
 
     // Check for libraries
     const hasLibDir = libFolder

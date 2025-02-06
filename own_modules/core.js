@@ -10,6 +10,7 @@ const {
   writeVSCSettings,
   writeVSCTasks,
 } = require("./file_tools");
+const { groupWorkersByRepositories } = require("./utils");
 
 /**
  * This module houses the main entry point function (`cliMain`) used when MASCOT is invoked through CLI.
@@ -92,7 +93,8 @@ function cliMain(inputData, utils, monitoringFn) {
     return;
   }
 
-  // Check/ensure that provided `c_programming_languages` and `g_manual_dependencies` are legitimate Arrays.
+  // Check/ensure that provided `c_programming_languages`, `g_manual_dependencies` and `g_workers`
+  // are legitimate Arrays.
   function getArrayOrSerializedArray(val) {
     if (!val) {
       return null;
@@ -145,6 +147,18 @@ function cliMain(inputData, utils, monitoringFn) {
     }
   }
 
+  let workers_map = null;
+  if (inputData.g_workers) {
+    workers_map = getArrayOrSerializedArray(inputData.g_workers);
+    if (!workers_map) {
+      $m({
+        type: "error",
+        message: `Provided \`--g_workers\` is not an Array or serialized Array.`,
+      });
+      return;
+    }
+  }
+
   // Ensure the scratch folder is available
   const scratchDirName = `${appInfo.appPathName}.scratch`;
   utils.ensureSetup(utils.getUserHomeDirectory(), {
@@ -153,6 +167,45 @@ function cliMain(inputData, utils, monitoringFn) {
   const scratchDirPath = path.normalize(
     path.join(utils.getUserHomeDirectory(), scratchDirName)
   );
+
+  // Segregate the list of workers based on how each worker relates to its project.
+  const internalWorkers = [];
+  const externalWorkers = [];
+  if (workers_map) {
+    workers_map.forEach((workerInfo) => {
+      const { project, workers } = workerInfo;
+      const normalizedProject = path.resolve(project);
+      if (!fs.existsSync(normalizedProject)) {
+        $m({
+          type: "error",
+          message: `Provided worker project does not exist: ${normalizedProject}. Skipping`,
+        });
+        return;
+      }
+
+      workers.forEach(({ file, output }) => {
+        const normalizedFile = path.resolve(file);
+        if (!fs.existsSync(normalizedFile)) {
+          $m({
+            type: "error",
+            message: `Provided worker file does not exist: ${normalizedFile}. Skipping`,
+          });
+          return;
+        }
+
+        const normalizedOutput = path.resolve(output);
+
+        (normalizedFile.startsWith(normalizedProject)
+          ? internalWorkers
+          : externalWorkers
+        ).push({
+          project: normalizedProject,
+          workerFile: normalizedFile,
+          workerOutput: normalizedOutput,
+        });
+      });
+    });
+  }
 
   // EXECUTE TASKS BASED ON INPUT
   // ----------------------------
@@ -187,8 +240,16 @@ function cliMain(inputData, utils, monitoringFn) {
 
     // Analyze workspace dependencies and generate `asconfig.json` files if requested.
     if (inputData.generate) {
+
+      // List all known external worker projects. Their `type` must be whitelisted as
+      // `application`.
+      const appsWhiteList =
+        externalWorkers && externalWorkers.length
+          ? externalWorkers.map((workerInfo) => workerInfo.project)
+          : null;
+
       // Index all classes in all ActionScript projects.
-      doShallowScan(workspace_directory, scratchDirPath, true);
+      doShallowScan(workspace_directory, scratchDirPath, true, appsWhiteList);
 
       // Establish couplings at class levels (i.e., which class uses which other classes).
       doDeepScan(workspace_directory, scratchDirPath, true);
@@ -202,11 +263,27 @@ function cliMain(inputData, utils, monitoringFn) {
         );
       }
 
+      // Patch couplings to account for known external worker projects. These must be
+      // considered as dependencies.
+      if (externalWorkers && externalWorkers.length) {
+        manuallyAddDependencies(
+          workspace_directory,
+          scratchDirPath,
+          groupWorkersByRepositories(externalWorkers)
+        );
+      }
+
       // Build project level dependencies, i.e., "this" project depends on "these other" projects.
       buildDependencies(workspace_directory, scratchDirPath, true);
 
       // Actually generate one `asconfig.json` file for each ActionScript project in the workspace.
-      writeConfig(workspace_directory, scratchDirPath, true, null, inputData.g_asconfig_base);
+      writeConfig(
+        workspace_directory,
+        scratchDirPath,
+        true,
+        null,
+        inputData.g_asconfig_base
+      );
 
       // Ensure each ActionScript project in the workspace has a `.vscode/settings.json` file containing,
       // at the very least the path to the AIR SDK to use.
