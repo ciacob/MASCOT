@@ -57,20 +57,57 @@ function relPathToPackageName(relPath) {
  * @returns {Array} - Array of objects with projects and their corresponding dependencies.
  */
 function groupWorkersByRepositories(data) {
-  return data.reduce((acc, { project, workerFile }) => {
-    const workerRepo = path.dirname(workerFile);
+  return data.reduce((acc, { project, workerProject }) => {
     const projectIndex = acc.findIndex((item) => item.project === project);
 
     if (projectIndex === -1) {
-      acc.push({ project, dependencies: [workerRepo] });
+      acc.push({ project, dependencies: [workerProject] });
     } else {
-      if (!acc[projectIndex].dependencies.includes(workerRepo)) {
-        acc[projectIndex].dependencies.push(workerRepo);
+      if (!acc[projectIndex].dependencies.includes(workerProject)) {
+        acc[projectIndex].dependencies.push(workerProject);
       }
     }
 
     return acc;
   }, []);
+}
+
+/**
+ * Determines whether `somePath` is underneath `someFolder`. Does not rely on string
+ * comparison, which makes this function robust and reliable.
+ *
+ * @param {String} somePath
+ *        Absolute path on disk to a folder or file.
+ *
+ * @param {String} someFolder
+ *        Absolute path on disk to a folder.
+ *
+ * @returns `True` if `somePath` lives under `someFolder`, or `false` otherwise.
+ */
+function isInFolder(somePath, someFolder) {
+  const relative = path.relative(someFolder, somePath);
+  return relative && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+/**
+ * Finds the ancestor folder of `repoSubPath` that is a direct child of `workspacePath`.
+ * @param {String} repoSubPath
+ *        Arbitrary absolute path from underneath `workspacePath`.
+ *
+ * @param {String} workspacePath
+ *        Ancestor path of `repoSubPath`.
+ *
+ * @returns The absolute path to the "repository home", a folder that lives directly
+ * under `workspacePath` and contains `repoSubPath`. Returns `null` if `repoSubPath`
+ * does not live under `workspacePath`.
+ */
+function findRepoHome(repoSubPath, workspacePath) {
+  if (!isInFolder(repoSubPath, workspacePath)) {
+    return null;
+  }
+  const relativePath = path.relative(workspacePath, repoSubPath);
+  const pathParts = relativePath.split(path.sep);
+  return path.normalize(path.join(workspacePath, pathParts[0]));
 }
 
 module.exports = {
@@ -79,4 +116,6 @@ module.exports = {
   toForwardSlash,
   relPathToPackageName,
   groupWorkersByRepositories,
+  isInFolder,
+  findRepoHome,
 };

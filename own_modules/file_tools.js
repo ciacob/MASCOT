@@ -145,9 +145,9 @@ function writeConfig(
     // worker specific information.
     const externalWorkerInfo =
       externalWorkers && externalWorkers.length
-        ? externalWorkers.find(
-            (workerInfo) => workerInfo.project === projectPath
-          ) || null
+        ? externalWorkers.find((workerInfo) => {
+            return workerInfo.workerProject === projectPath;
+          }) || null
         : null;
 
     // Determine the internal workers that need to be added to the
@@ -167,7 +167,16 @@ function writeConfig(
     const asConfigOwn = {
       config: defaultValues.config_type,
       ...(projectType === "app"
-        ? { type: "app", mainClass, application: appDescriptor }
+        ? {
+            type: "app",
+            mainClass: externalWorkerInfo
+              ? path.basename(
+                  externalWorkerInfo.workerFile,
+                  path.extname(externalWorkerInfo.workerFile)
+                )
+              : mainClass,
+            application: appDescriptor,
+          }
         : { type: "lib" }),
       copySourcePathAssets: defaultValues.copy_assets,
       compilerOptions: {
@@ -182,10 +191,19 @@ function writeConfig(
         ...(projectType === "lib"
           ? { "include-sources": [defaultValues.src_dir] }
           : {}),
-        "source-path": [defaultValues.src_dir],
         ...(internalWorkersList && internalWorkersList.length
           ? { workers: internalWorkersList }
           : {}),
+        ...(projectType === "lib"
+          ? { "source-path": [defaultValues.src_dir] }
+          : {
+              "source-path": [
+                defaultValues.src_dir,
+                path.dirname(
+                  externalWorkerInfo ? externalWorkerInfo.workerFile : mainClass
+                ),
+              ].filter((item) => item != "."),
+            }),
       },
     };
     const asConfig = deepMergeData(asConfigInherited, asConfigOwn);

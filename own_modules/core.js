@@ -10,7 +10,11 @@ const {
   writeVSCSettings,
   writeVSCTasks,
 } = require("./file_tools");
-const { groupWorkersByRepositories } = require("./utils");
+const {
+  groupWorkersByRepositories,
+  isInFolder,
+  findRepoHome,
+} = require("./utils");
 
 /**
  * This module houses the main entry point function (`cliMain`) used when MASCOT is invoked through CLI.
@@ -72,7 +76,7 @@ function cliMain(inputData, utils, monitoringFn) {
     return;
   }
 
-  // Check if provided `workspace_directory` exist on disk.
+  // Ensure provided `workspace_directory` exist on disk; also normalize it.
   if (
     inputData.workspace_directory &&
     !fs.existsSync(inputData.workspace_directory)
@@ -83,6 +87,7 @@ function cliMain(inputData, utils, monitoringFn) {
     });
     return;
   }
+  const workspace_directory = path.normalize(inputData.workspace_directory);
 
   // Check if provided `g_sdk_directory` exists on disk.
   if (inputData.g_sdk_directory && !fs.existsSync(inputData.g_sdk_directory)) {
@@ -195,11 +200,12 @@ function cliMain(inputData, utils, monitoringFn) {
 
         const normalizedOutput = path.resolve(output);
 
-        (normalizedFile.startsWith(normalizedProject)
+        (isInFolder(normalizedFile, normalizedProject)
           ? internalWorkers
           : externalWorkers
         ).push({
           project: normalizedProject,
+          workerProject: findRepoHome(normalizedFile, workspace_directory),
           workerFile: normalizedFile,
           workerOutput: normalizedOutput,
         });
@@ -209,7 +215,6 @@ function cliMain(inputData, utils, monitoringFn) {
 
   // EXECUTE TASKS BASED ON INPUT
   // ----------------------------
-  const workspace_directory = path.normalize(inputData.workspace_directory);
   (async function () {
     // Do a GitHub clone if requested
     if (inputData.clone) {
@@ -240,12 +245,11 @@ function cliMain(inputData, utils, monitoringFn) {
 
     // Analyze workspace dependencies and generate `asconfig.json` files if requested.
     if (inputData.generate) {
-
       // List all known external worker projects. Their `type` must be whitelisted as
       // `application`.
       const appsWhiteList =
         externalWorkers && externalWorkers.length
-          ? externalWorkers.map((workerInfo) => workerInfo.project)
+          ? externalWorkers.map((workerInfo) => workerInfo.workerProject)
           : null;
 
       // Index all classes in all ActionScript projects.
@@ -266,10 +270,12 @@ function cliMain(inputData, utils, monitoringFn) {
       // Patch couplings to account for known external worker projects. These must be
       // considered as dependencies.
       if (externalWorkers && externalWorkers.length) {
+        const workersByRepositories =
+          groupWorkersByRepositories(externalWorkers);
         manuallyAddDependencies(
           workspace_directory,
           scratchDirPath,
-          groupWorkersByRepositories(externalWorkers)
+          workersByRepositories
         );
       }
 
@@ -282,7 +288,9 @@ function cliMain(inputData, utils, monitoringFn) {
         scratchDirPath,
         true,
         null,
-        inputData.g_asconfig_base
+        inputData.g_asconfig_base,
+        externalWorkers,
+        internalWorkers
       );
 
       // Ensure each ActionScript project in the workspace has a `.vscode/settings.json` file containing,
