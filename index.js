@@ -88,7 +88,7 @@ const settings = {
     {
       name: "Generate: Workers",
       payload: /^--(g_workers|g_w)=(.+)$/,
-      doc: 'Optional JSON Array literal of Objects, each containing `project` (String) and `workers` (Array of Objects). Each worker object must specify `file` (the ActionScript worker class file) and `output` (the intended SWF output path). Manages compilation of standalone workers, either "living at home" or on their own (in their own project). Set this via configuration file, preferably.',
+      doc: 'Optional JSON Array literal of Objects, each containing `project` (String, the project that uses the workers) and `workers` (Array of Objects). Each worker object must specify `file` (the ActionScript worker class file) and `output` (where `project` expects the compiled SWF). A worker inside `project` goes into its `asconfig.json` `workers` section; a worker in a project of its own is compiled into that project\'s `bin`, built before `project`, and copied to `output` by a generated task. Set this via configuration file, preferably.',
     },
   ],
   intrinsicDefaults: {

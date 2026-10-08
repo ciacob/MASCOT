@@ -252,8 +252,23 @@ function cliMain(inputData, utils, monitoringFn) {
           ? externalWorkers.map((workerInfo) => workerInfo.workerProject)
           : null;
 
+      // Map each external worker project to the copies of its worker that must exist; a missing copy makes
+      // the project dirty.
+      const requiredOutputs = {};
+      externalWorkers.forEach(({ workerProject, workerOutput }) => {
+        (requiredOutputs[workerProject] = requiredOutputs[workerProject] || []).push(
+          workerOutput
+        );
+      });
+
       // Index all classes in all ActionScript projects.
-      doShallowScan(workspace_directory, scratchDirPath, true, appsWhiteList);
+      doShallowScan(
+        workspace_directory,
+        scratchDirPath,
+        true,
+        appsWhiteList,
+        requiredOutputs
+      );
 
       // Establish couplings at class levels (i.e., which class uses which other classes).
       doDeepScan(workspace_directory, scratchDirPath, true);
@@ -313,7 +328,8 @@ function cliMain(inputData, utils, monitoringFn) {
         workspace_directory,
         scratchDirPath,
         { path_to_air_sdk: inputData.g_sdk_directory },
-        true
+        true,
+        externalWorkers
       );
     }
   })();

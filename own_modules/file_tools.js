@@ -1,7 +1,12 @@
 const fs = require("fs");
 const path = require("path");
 const { deepMergeData } = require("cli-primer");
-const { groupWorkersByRepositories } = require("./utils");
+const {
+  groupWorkersByRepositories,
+  isInFolder,
+  relPathToPackageName,
+  workerBinaryPath,
+} = require("./utils");
 
 /**
  * Generates `asconfig.json` files for projects listed in `projects.json`.
@@ -133,12 +138,17 @@ function writeConfig(
           : undefined
         : undefined;
 
-    // Resolve library paths
+    // Resolve library paths. External worker projects are dependencies only for build order: they compile
+    // to a SWF, never to a library, so their `bin` folder has nothing to link.
+    const workerProjects =
+      externalWorkers && externalWorkers.length
+        ? externalWorkers.map((workerInfo) => workerInfo.workerProject)
+        : [];
     const libraryPath = [
       ...(has_lib_dir ? ["lib"] : []),
-      ...project_dependencies.map((depPath) =>
-        path.join(depPath, defaultValues.bin_dir)
-      ),
+      ...project_dependencies
+        .filter((depPath) => !workerProjects.includes(depPath))
+        .map((depPath) => path.join(depPath, defaultValues.bin_dir)),
     ];
 
     // If the current project is an external worker project, grab its
@@ -149,6 +159,28 @@ function writeConfig(
             return workerInfo.workerProject === projectPath;
           }) || null
         : null;
+
+    // An external worker project compiles its worker into its own `bin` folder, as an application whose main
+    // class is the worker class; `writeVSCTasks` adds a task that copies the binary to the worker's `output`.
+    // Compiling straight to `output` would also drop an AIR descriptor there, and leave `bin` without a binary
+    // to judge the project's freshness by. A worker class under `src` is named by its package; anything else
+    // gets its own folder on the source path.
+    let workerMainClass = null;
+    let workerSourceDir = null;
+    if (externalWorkerInfo) {
+      const { workerFile } = externalWorkerInfo;
+      const workerClassName = path.basename(workerFile, path.extname(workerFile));
+      const srcPath = path.join(projectPath, defaultValues.src_dir);
+      if (isInFolder(workerFile, srcPath)) {
+        const packageName = relPathToPackageName(path.relative(srcPath, workerFile));
+        workerMainClass = packageName
+          ? `${packageName}.${workerClassName}`
+          : workerClassName;
+      } else {
+        workerMainClass = workerClassName;
+        workerSourceDir = path.dirname(workerFile);
+      }
+    }
 
     // Determine the internal workers that need to be added to the
     // "workers" section of the `asconfig.json` file of the current project.
@@ -169,12 +201,7 @@ function writeConfig(
       ...(projectType === "app"
         ? {
             type: "app",
-            mainClass: externalWorkerInfo
-              ? path.basename(
-                  externalWorkerInfo.workerFile,
-                  path.extname(externalWorkerInfo.workerFile)
-                )
-              : mainClass,
+            mainClass: externalWorkerInfo ? workerMainClass : mainClass,
             application: appDescriptor,
           }
         : { type: "lib" }),
@@ -186,7 +213,10 @@ function writeConfig(
           projectType === "lib"
             ? `${defaultValues.bin_dir}/${sanitizeFileName(project_name)}.swc`
             : externalWorkerInfo
-            ? externalWorkerInfo.workerOutput
+            ? path.relative(
+                projectPath,
+                workerBinaryPath(externalWorkerInfo, defaultValues.bin_dir)
+              )
             : `${defaultValues.bin_dir}/${mainClass}.swf`,
         ...(projectType === "lib"
           ? { "include-sources": [defaultValues.src_dir] }
@@ -199,10 +229,8 @@ function writeConfig(
           : {
               "source-path": [
                 defaultValues.src_dir,
-                path.dirname(
-                  externalWorkerInfo ? externalWorkerInfo.workerFile : mainClass
-                ),
-              ].filter((item) => item != "."),
+                externalWorkerInfo ? workerSourceDir : path.dirname(mainClass),
+              ].filter((item) => item && item != "."),
             }),
       },
     };
@@ -337,7 +365,13 @@ function writeVSCSettings(workspaceDir, cacheDir, settings, purge = false) {
  *                             `path_to_asconfigc` and `path_to_air_sdk` are expected keys.
  * @param {boolean} [purge=false] - Whether to replace existing MASCOT tasks or skip if found.
  */
-function writeVSCTasks(workspaceDir, cacheDir, settings, purge = false) {
+function writeVSCTasks(
+  workspaceDir,
+  cacheDir,
+  settings,
+  purge = false,
+  externalWorkers = null
+) {
   const tasksFilePath = path.join(cacheDir, "tasks.json");
   const problemsFilePath = path.join(cacheDir, "problems.log");
 
@@ -421,6 +455,37 @@ function writeVSCTasks(workspaceDir, cacheDir, settings, purge = false) {
         return label;
       }
 
+      // Nested helper function to create the task that copies a freshly built external worker to where its
+      // parent project expects it. Runs right after the worker project's build task, so that every project
+      // built after it (the parent included) finds the new binary in place. Plain Node, hence cross-platform.
+      function createCopyTask(
+        $workerInfo,
+        $index,
+        $debug,
+        $previousTaskLabel
+      ) {
+        const label = `MASCOT: copy worker #${$index + 1} ${path.basename(
+          $workerInfo.workerOutput
+        )} (${$debug ? "debug" : "release"})`;
+        tasksJson.tasks.push({
+          label,
+          type: "shell",
+          command: "node",
+          args: [
+            "-e",
+            "const f=require('fs'),p=require('path');" +
+              "f.mkdirSync(p.dirname(process.argv[2]),{recursive:true});" +
+              "f.copyFileSync(process.argv[1],process.argv[2]);",
+            workerBinaryPath($workerInfo),
+            $workerInfo.workerOutput,
+          ],
+          group: { kind: "none", isDefault: false },
+          problemMatcher: [],
+          dependsOn: $previousTaskLabel,
+        });
+        return label;
+      }
+
       const isRebuild = project_build_tasks.length === 0;
 
       project_build_tasks.pop(); // ignore the master task
@@ -438,6 +503,18 @@ function writeVSCTasks(workspaceDir, cacheDir, settings, purge = false) {
             debugMode,
             previousTaskLabel
           );
+          if (externalWorkers && externalWorkers.length) {
+            externalWorkers
+              .filter((workerInfo) => workerInfo.workerProject === depProjectPath)
+              .forEach((workerInfo) => {
+                previousTaskLabel = createCopyTask(
+                  workerInfo,
+                  index,
+                  debugMode,
+                  previousTaskLabel
+                );
+              });
+          }
         });
 
         // Add a master task for compiling the project itself.

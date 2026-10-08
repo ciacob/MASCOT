@@ -22,12 +22,17 @@ const {
  *
  * @param {boolean} [appsWhiteList=null]
  *        Optional list of project directories always considered applications, bypassing type checks.
+ *
+ * @param {Object} [requiredOutputs=null]
+ *        Optional map of project directories to files their build must produce elsewhere (e.g., an external
+ *        worker's copy in its parent project). A project with any of these missing counts as dirty.
  */
 function doShallowScan(
   workspaceDir,
   outputDir,
   replace = false,
-  appsWhiteList = null
+  appsWhiteList = null,
+  requiredOutputs = null
 ) {
   workspaceDir = path.resolve(workspaceDir);
   const projectsFilePath = path.join(outputDir, "projects.json");
@@ -165,8 +170,13 @@ function doShallowScan(
       });
     }
 
-    // Determine dirtiness
-    const isDirty = codeTimestamp > binaryTimestamp;
+    // Determine dirtiness. A missing required output (e.g., the copy of an external worker) means the
+    // project must be built again, whatever the timestamps say.
+    const missingOutput =
+      requiredOutputs && requiredOutputs[projectDir]
+        ? requiredOutputs[projectDir].some((file) => !fs.existsSync(file))
+        : false;
+    const isDirty = codeTimestamp > binaryTimestamp || missingOutput;
 
     // Determine the probability that the current project is an application.
     const isAppProbability =

@@ -110,6 +110,26 @@ function findRepoHome(repoSubPath, workspacePath) {
   return path.normalize(path.join(workspacePath, pathParts[0]));
 }
 
+/**
+ * Where an external worker project compiles its worker: `<worker project>/<binDir>/<WorkerClass>.swf`. A build task
+ * then copies it to the worker's `output` (see `writeVSCTasks`).
+ *
+ * @param {Object} workerInfo
+ *        An external worker entry, with at least `workerProject` and `workerFile`.
+ *
+ * @param {String} [binDir="bin"]
+ *        The name of the project's binaries folder.
+ *
+ * @returns {String} Absolute path to the compiled worker binary.
+ */
+function workerBinaryPath(workerInfo, binDir = "bin") {
+  const className = path.basename(
+    workerInfo.workerFile,
+    path.extname(workerInfo.workerFile)
+  );
+  return path.join(workerInfo.workerProject, binDir, `${className}.swf`);
+}
+
 module.exports = {
   packageToRelPath,
   splitQualifiedName,
@@ -118,4 +138,5 @@ module.exports = {
   groupWorkersByRepositories,
   isInFolder,
   findRepoHome,
+  workerBinaryPath,
 };
