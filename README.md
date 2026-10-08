@@ -218,7 +218,7 @@ A worker can live in either of two places:
 
 The worker is compiled into its own `bin`, not straight to `output`, for two reasons. An AIR application build also writes an application descriptor next to its binary, which would end up among `project`'s assets. And selective building judges freshness by the binary in `bin` (see [Selective Building](#14-selective-building)). In addition, a worker project counts as _dirty_ whenever one of its `output` files is missing, so a deleted copy is always restored.
 
-> **Note**: the copy task runs `node`, which is available wherever MASCOT is, on any operating system.
+> **Note**: the copy task runs `node` on MASCOT's own `own_modules/copy_file.js`, so it works wherever MASCOT is installed, on any operating system. Its path is written into `tasks.json`: if you move or reinstall MASCOT, run `mascot-app --g` again.
 
 > **Note**: building a worker project on its own, through its own `MASCOT: compile ...` task, compiles it but does not copy it; build the project that uses it instead.
 

@@ -457,7 +457,8 @@ function writeVSCTasks(
 
       // Nested helper function to create the task that copies a freshly built external worker to where its
       // parent project expects it. Runs right after the worker project's build task, so that every project
-      // built after it (the parent included) finds the new binary in place. Plain Node, hence cross-platform.
+      // built after it (the parent included) finds the new binary in place. Runs MASCOT's own `copy_file.js`
+      // with Node, hence cross-platform: no inline `node -e` code, whose quotes VS Code would not escape.
       function createCopyTask(
         $workerInfo,
         $index,
@@ -472,10 +473,7 @@ function writeVSCTasks(
           type: "shell",
           command: "node",
           args: [
-            "-e",
-            "const f=require('fs'),p=require('path');" +
-              "f.mkdirSync(p.dirname(process.argv[2]),{recursive:true});" +
-              "f.copyFileSync(process.argv[1],process.argv[2]);",
+            path.join(__dirname, "copy_file.js"),
             workerBinaryPath($workerInfo),
             $workerInfo.workerOutput,
           ],
